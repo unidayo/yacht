@@ -1,0 +1,16 @@
+{
+  "name": "yacht-core",
+  "type": "module",
+  "description": "Yacht dice game engine with AI",
+  "version": "0.1.0",
+  "files": [
+    "yacht_core_bg.wasm",
+    "yacht_core.js",
+    "yacht_core.d.ts"
+  ],
+  "main": "yacht_core.js",
+  "types": "yacht_core.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

@@ -1,0 +1,28 @@
+# Rust
+/yacht-core/target/
+/yacht-core/Cargo.lock
+
+# Node
+/yacht-web/node_modules/
+/yacht-web/dist/
+
+# WASM build artifacts (generated, but we'll include for easier setup)
+# /yacht-web/src/wasm/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local

@@ -1,0 +1,349 @@
+* {
+  box-sizing: border-box;
+}
+
+.app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+h1 {
+  text-align: center;
+  color: #2c3e50;
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-size: 1.5rem;
+  color: #666;
+}
+
+/* スタート画面 */
+.start-screen {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.start-screen p {
+  font-size: 1.2rem;
+  color: #666;
+  margin-bottom: 30px;
+}
+
+.start-button,
+.restart-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 15px 40px;
+  font-size: 1.2rem;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.start-button:hover,
+.restart-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+}
+
+.restart-button {
+  margin-top: 20px;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* メッセージ */
+.message {
+  text-align: center;
+  font-size: 1.3rem;
+  color: #2c3e50;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+/* ゲームエリア */
+.game-area {
+  display: flex;
+  gap: 30px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* サイコロエリア */
+.dice-area {
+  flex: 1;
+  min-width: 300px;
+  max-width: 400px;
+}
+
+.dice-container {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.die {
+  width: 60px;
+  height: 60px;
+  background: white;
+  border: 3px solid #ddd;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.die:hover {
+  border-color: #667eea;
+}
+
+.die.held {
+  border-color: #e74c3c;
+  background: #fef0f0;
+  box-shadow: 0 0 10px rgba(231, 76, 60, 0.3);
+}
+
+.die.ai-held {
+  border-color: #9b59b6;
+  background: #f5eef8;
+  box-shadow: 0 0 10px rgba(155, 89, 182, 0.4);
+}
+
+.die.rolling {
+  animation: shake 0.1s infinite;
+}
+
+@keyframes shake {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+
+/* サイコロの目 */
+.dice-face {
+  width: 50px;
+  height: 50px;
+  position: relative;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  background: #2c3e50;
+  border-radius: 50%;
+  position: absolute;
+}
+
+.dot.center {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.dot.top-left {
+  top: 5px;
+  left: 5px;
+}
+
+.dot.top-right {
+  top: 5px;
+  right: 5px;
+}
+
+.dot.middle-left {
+  top: 50%;
+  left: 5px;
+  transform: translateY(-50%);
+}
+
+.dot.middle-right {
+  top: 50%;
+  right: 5px;
+  transform: translateY(-50%);
+}
+
+.dot.bottom-left {
+  bottom: 5px;
+  left: 5px;
+}
+
+.dot.bottom-right {
+  bottom: 5px;
+  right: 5px;
+}
+
+.roll-info {
+  text-align: center;
+  font-size: 1.1rem;
+  color: #666;
+  margin-bottom: 15px;
+}
+
+.roll-button {
+  display: block;
+  width: 100%;
+  padding: 15px;
+  font-size: 1.1rem;
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.roll-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
+}
+
+.roll-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* スコアボード */
+.scoreboard {
+  flex: 1;
+  min-width: 350px;
+}
+
+.scoreboard table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.scoreboard th {
+  background: #2c3e50;
+  color: white;
+  padding: 12px 8px;
+  font-weight: 600;
+}
+
+.scoreboard td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #eee;
+  text-align: center;
+}
+
+.scoreboard .category-name {
+  text-align: left;
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.scoreboard tr.selectable {
+  background: #f0f8ff;
+}
+
+.scoreboard tr.selectable:hover {
+  background: #e0f0ff;
+}
+
+.score {
+  min-width: 60px;
+  font-weight: 600;
+}
+
+.score.player-score {
+  color: #2980b9;
+}
+
+.score.player-score.empty {
+  cursor: pointer;
+}
+
+.score.ai-score {
+  color: #c0392b;
+}
+
+.score.empty {
+  color: #999;
+}
+
+.potential {
+  color: #27ae60;
+  font-style: italic;
+}
+
+.score.highlight {
+  background: #fff3cd;
+  animation: pulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  from { background: #fff3cd; }
+  to { background: #ffe066; }
+}
+
+.scoreboard tr.subtotal td,
+.scoreboard tr.bonus td {
+  background: #f8f9fa;
+  font-weight: 500;
+  color: #666;
+}
+
+.scoreboard tr.bonus td {
+  font-size: 0.85rem;
+}
+
+.scoreboard tr.total td {
+  background: #2c3e50;
+  color: white;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.scoreboard tr.total .player-total {
+  color: #5dade2;
+}
+
+.scoreboard tr.total .ai-total {
+  color: #f1948a;
+}
+
+/* レスポンシブ */
+@media (max-width: 700px) {
+  .game-area {
+    flex-direction: column;
+  }
+
+  .dice-area,
+  .scoreboard {
+    max-width: 100%;
+  }
+
+  .die {
+    width: 50px;
+    height: 50px;
+  }
+
+  .dice-face {
+    width: 40px;
+    height: 40px;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+  }
+}
