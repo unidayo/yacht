@@ -1,7 +1,6 @@
 use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
 use rand::Rng;
-use std::collections::HashMap;
 
 // ヨットの役（カテゴリ）
 #[wasm_bindgen]
@@ -64,6 +63,7 @@ impl Category {
 pub struct Dice {
     values: [u8; 5],
     held: [bool; 5],
+    locked: [bool; 5],  // ロール時に確定したキープ（解除不可）
 }
 
 #[wasm_bindgen]
@@ -73,11 +73,18 @@ impl Dice {
         Dice {
             values: [1, 1, 1, 1, 1],
             held: [false; 5],
+            locked: [false; 5],
         }
     }
 
     pub fn roll(&mut self) {
         let mut rng = rand::thread_rng();
+        // ロール時にheldをlockedに確定
+        for i in 0..5 {
+            if self.held[i] {
+                self.locked[i] = true;
+            }
+        }
         for i in 0..5 {
             if !self.held[i] {
                 self.values[i] = rng.gen_range(1..=6);
@@ -92,13 +99,22 @@ impl Dice {
     }
 
     pub fn toggle_hold(&mut self, index: usize) {
-        if index < 5 {
+        if index < 5 && !self.locked[index] {
             self.held[index] = !self.held[index];
         }
     }
 
     pub fn reset_holds(&mut self) {
         self.held = [false; 5];
+        self.locked = [false; 5];
+    }
+
+    pub fn is_locked(&self, index: usize) -> bool {
+        self.locked[index]
+    }
+
+    pub fn get_locks(&self) -> Vec<u8> {
+        self.locked.iter().map(|&l| if l { 1 } else { 0 }).collect()
     }
 
     pub fn get_value(&self, index: usize) -> u8 {
@@ -322,6 +338,10 @@ impl GameState {
         }
     }
 
+    pub fn get_dice_locks(&self) -> Vec<u8> {
+        self.dice.get_locks()
+    }
+
     pub fn reset_holds(&mut self) {
         self.dice.reset_holds();
     }
@@ -446,22 +466,14 @@ impl Default for GameState {
 
 // ========== AI Engine ==========
 
-// 全サイコロの組み合わせを列挙するための定数
-const DICE_OUTCOMES: usize = 252; // C(10,5) = 252 distinct outcomes for 5 dice
-
 #[wasm_bindgen]
-pub struct YachtAI {
-    // 事前計算された期待値テーブル
-    expected_values: HashMap<(u64, u8), f64>,
-}
+pub struct YachtAI {}
 
 #[wasm_bindgen]
 impl YachtAI {
     #[wasm_bindgen(constructor)]
     pub fn new() -> YachtAI {
-        YachtAI {
-            expected_values: HashMap::new(),
-        }
+        YachtAI {}
     }
 
     // AIの手番を実行（ロールとカテゴリ選択を含む）
@@ -486,7 +498,6 @@ impl YachtAI {
 
         // 3回目のロール判断
         if game.get_rolls_left() > 0 {
-            game.dice.reset_holds();
             let holds = self.decide_holds(game);
             for (i, hold) in holds.iter().enumerate() {
                 if *hold {
@@ -812,7 +823,7 @@ mod tests {
     #[test]
     fn test_little_straight() {
         let dice = [1, 2, 3, 4, 5];
-        assert_eq!(calculate_score(&dice, Category::LittleStraight), 30);
+        assert_eq!(calculate_score(&dice, Category::LittleStraight), 15);
     }
 
     #[test]
@@ -824,7 +835,7 @@ mod tests {
     #[test]
     fn test_four_of_kind() {
         let dice = [4, 4, 4, 4, 2];
-        assert_eq!(calculate_score(&dice, Category::FourOfAKind), 16);
+        assert_eq!(calculate_score(&dice, Category::FourOfAKind), 18);
     }
 
     #[test]

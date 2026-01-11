@@ -149,6 +149,10 @@ h1 {
   position: absolute;
 }
 
+.dice-face.one .dot {
+  background: #e74c3c;
+}
+
 .dot.center {
   top: 50%;
   left: 50%;

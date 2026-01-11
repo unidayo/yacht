@@ -99,7 +99,7 @@ function App() {
         diceHolds[i] ? v : Math.floor(Math.random() * 6) + 1
       ))
       animCount++
-      if (animCount >= 8) {
+      if (animCount >= 6) {
         clearInterval(animInterval)
         game.roll_dice()
         syncGameState(game)
@@ -111,10 +111,10 @@ function App() {
           setMessage(`残り${game.get_rolls_left()}回振れます`)
         }
       }
-    }, 50)
+    }, 35)
   }, [game, rollsLeft, phase, diceHolds, syncGameState])
 
-  // サイコロをホールド/アンホールド
+  // サイコロをホールド（ロールで確定したキープは解除不可）
   const toggleHold = useCallback((index: number) => {
     if (!game || rollsLeft === 3 || rollsLeft === 0 || phase !== 'playing') return
     game.toggle_hold(index)
@@ -124,11 +124,11 @@ function App() {
   // AIのサイコロアニメーション
   const animateAiRoll = useCallback(async (currentHolds: boolean[]) => {
     setRolling(true)
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 6; i++) {
       setDiceValues(prev => prev.map((v, idx) =>
         currentHolds[idx] ? v : Math.floor(Math.random() * 6) + 1
       ))
-      await sleep(50)
+      await sleep(35)
     }
     setRolling(false)
   }, [])
@@ -142,85 +142,89 @@ function App() {
     await animateAiRoll([false, false, false, false, false])
     g.roll_dice()
     syncGameState(g)
-    await sleep(800)
+    await sleep(500)
 
     // 2回目のロール判断
+    let skipThirdRoll = false
     if (g.get_rolls_left() > 0) {
       setMessage('AIが考えています...')
-      await sleep(600)
+      await sleep(400)
 
       const holds1 = Array.from(aiPlayer.get_holds_decision(g)).map(h => h === 1)
 
-      // ホールドするサイコロを表示
-      if (holds1.some(h => h)) {
-        setMessage('AIがサイコロをキープしています...')
-        setDiceHolds(holds1)
-        for (let i = 0; i < 5; i++) {
-          if (holds1[i]) {
-            g.toggle_hold(i)
-          }
+      // ホールドするサイコロを設定
+      for (let i = 0; i < 5; i++) {
+        if (holds1[i]) {
+          g.toggle_hold(i)
         }
-        await sleep(800)
+      }
+      // 実際のゲーム状態を反映
+      syncGameState(g)
+
+      const actualHolds1 = Array.from(g.get_dice_holds()).map(h => h === 1)
+      if (actualHolds1.some(h => h)) {
+        setMessage('AIがサイコロをキープしています...')
+        await sleep(500)
       }
 
-      // 全てキープなら振らない
-      if (holds1.every(h => h)) {
+      // 全てキープなら振らない→カテゴリ選択へ
+      if (actualHolds1.every(h => h)) {
         setMessage('AIは振り直しません')
-        await sleep(600)
+        await sleep(400)
+        skipThirdRoll = true
       } else {
         setMessage('AIがサイコロを振り直しています...')
-        await animateAiRoll(holds1)
+        await animateAiRoll(actualHolds1)
         g.roll_dice()
         syncGameState(g)
-        await sleep(800)
+        await sleep(500)
       }
     }
 
-    // 3回目のロール判断
-    if (g.get_rolls_left() > 0) {
+    // 3回目のロール判断（2回目で全てキープした場合はスキップ）
+    if (!skipThirdRoll && g.get_rolls_left() > 0) {
       setMessage('AIが考えています...')
-      await sleep(600)
+      await sleep(400)
 
-      // 現在のホールド状態を取得
-      const currentHolds = Array.from(g.get_dice_holds()).map(h => h === 1)
+      // AIの決定を取得
       const holds2 = Array.from(aiPlayer.get_holds_decision(g)).map(h => h === 1)
 
-      // ホールド状態が変わる場合のみ更新
-      let holdsChanged = false
+      // 新しくキープするダイスのみtoggle（ロック済みは自動的に拒否される）
       for (let i = 0; i < 5; i++) {
-        if (currentHolds[i] !== holds2[i]) {
+        if (holds2[i]) {
           g.toggle_hold(i)
-          holdsChanged = true
         }
       }
+      // 実際のゲーム状態を反映
+      syncGameState(g)
 
-      if (holdsChanged || holds2.some(h => h)) {
+      const actualHolds2 = Array.from(g.get_dice_holds()).map(h => h === 1)
+      if (actualHolds2.some(h => h)) {
         setMessage('AIがサイコロをキープしています...')
-        setDiceHolds(holds2)
-        await sleep(800)
+        await sleep(500)
       }
 
       // 全てキープなら振らない
-      if (holds2.every(h => h)) {
+      if (actualHolds2.every(h => h)) {
         setMessage('AIは振り直しません')
-        await sleep(600)
+        await sleep(400)
       } else {
         setMessage('AIがサイコロを振り直しています...')
-        await animateAiRoll(holds2)
+        await animateAiRoll(actualHolds2)
         g.roll_dice()
         syncGameState(g)
-        await sleep(800)
+        await sleep(500)
       }
     }
 
     // カテゴリ選択
     setMessage('AIが役を選んでいます...')
-    await sleep(600)
+    await sleep(400)
 
     const categoryChoice = aiPlayer.get_category_decision(g)
     setHighlightCategory(categoryChoice)
     setMessage(`AIが「${get_category_name_ja(categoryChoice)}」を選択しました`)
-    await sleep(1200)
+    await sleep(800)
 
     g.select_category(categoryChoice)
     setHighlightCategory(null)
@@ -391,7 +395,7 @@ function DiceFace({ value }: { value: number }) {
   }
 
   return (
-    <div className="dice-face">
+    <div className={`dice-face ${value === 1 ? 'one' : ''}`}>
       {dotPositions[value]?.map((pos, i) => (
         <div key={i} className={`dot ${pos}`} />
       ))}

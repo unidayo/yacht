@@ -171,12 +171,29 @@ export class Dice {
         return v1;
     }
     /**
+     * @returns {Uint8Array}
+     */
+    get_locks() {
+        const ret = wasm.dice_get_locks(this.__wbg_ptr);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
      * @param {number} index
      * @returns {number}
      */
     get_value(index) {
         const ret = wasm.dice_get_value(this.__wbg_ptr, index);
         return ret;
+    }
+    /**
+     * @param {number} index
+     * @returns {boolean}
+     */
+    is_locked(index) {
+        const ret = wasm.dice_is_locked(this.__wbg_ptr, index);
+        return ret !== 0;
     }
 }
 if (Symbol.dispose) Dice.prototype[Symbol.dispose] = Dice.prototype.free;
@@ -228,6 +245,15 @@ export class GameState {
      */
     get_dice_holds() {
         const ret = wasm.gamestate_get_dice_holds(this.__wbg_ptr);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * @returns {Uint8Array}
+     */
+    get_dice_locks() {
+        const ret = wasm.gamestate_get_dice_locks(this.__wbg_ptr);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;

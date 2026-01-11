@@ -28,7 +28,9 @@ export class Dice {
   is_held(index: number): boolean;
   set_hold(index: number, hold: boolean): void;
   get_holds(): Uint8Array;
+  get_locks(): Uint8Array;
   get_value(index: number): number;
+  is_locked(index: number): boolean;
 }
 
 export class GameState {
@@ -40,6 +42,7 @@ export class GameState {
   get_ai_total(): number;
   is_game_over(): boolean;
   get_dice_holds(): Uint8Array;
+  get_dice_locks(): Uint8Array;
   get_rolls_left(): number;
   get_dice_values(): Uint8Array;
   select_category(category_index: number): boolean;
@@ -97,9 +100,11 @@ export interface InitOutput {
   readonly __wbg_yachtai_free: (a: number, b: number) => void;
   readonly calculate_score_js: (a: number, b: number, c: number) => number;
   readonly dice_get_holds: (a: number) => [number, number];
+  readonly dice_get_locks: (a: number) => [number, number];
   readonly dice_get_value: (a: number, b: number) => number;
   readonly dice_get_values: (a: number) => [number, number];
   readonly dice_is_held: (a: number, b: number) => number;
+  readonly dice_is_locked: (a: number, b: number) => number;
   readonly dice_new: () => number;
   readonly dice_reset_holds: (a: number) => void;
   readonly dice_roll: (a: number) => void;
@@ -113,6 +118,7 @@ export interface InitOutput {
   readonly gamestate_get_available_categories: (a: number) => [number, number];
   readonly gamestate_get_current_player: (a: number) => number;
   readonly gamestate_get_dice_holds: (a: number) => [number, number];
+  readonly gamestate_get_dice_locks: (a: number) => [number, number];
   readonly gamestate_get_dice_values: (a: number) => [number, number];
   readonly gamestate_get_player_score: (a: number, b: number) => number;
   readonly gamestate_get_player_total: (a: number) => number;
@@ -140,9 +146,9 @@ export interface InitOutput {
   readonly scoreboard_set_score: (a: number, b: number, c: number) => number;
   readonly yachtai_get_category_decision: (a: number, b: number) => number;
   readonly yachtai_get_holds_decision: (a: number, b: number) => [number, number];
-  readonly yachtai_new: () => number;
   readonly yachtai_play_turn: (a: number, b: number) => [number, number];
   readonly gamestate_reset_holds: (a: number) => void;
+  readonly yachtai_new: () => number;
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_externrefs: WebAssembly.Table;
