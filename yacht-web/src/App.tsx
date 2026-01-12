@@ -4,6 +4,17 @@ import './App.css'
 
 type GamePhase = 'loading' | 'ready' | 'playing' | 'ai_turn' | 'game_over'
 
+interface CategoryRecommendation {
+  category: number
+  score: number
+  expected: number
+}
+
+interface HoldRecommendation {
+  holds: number[]
+  expected: number
+}
+
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 function App() {
@@ -26,6 +37,9 @@ function App() {
   const [message, setMessage] = useState('')
   const [rolling, setRolling] = useState(false)
   const [highlightCategory, setHighlightCategory] = useState<number | null>(null)
+  const [recommendedCategories, setRecommendedCategories] = useState<CategoryRecommendation[]>([])
+  const [recommendedHolds, setRecommendedHolds] = useState<HoldRecommendation[]>([])
+  const [showRecommendations, setShowRecommendations] = useState(true)
 
   // WASM初期化
   useEffect(() => {
@@ -33,6 +47,40 @@ function App() {
       setWasmLoaded(true)
       setPhase('ready')
     })
+  }, [])
+
+  // 推奨を更新
+  const updateRecommendations = useCallback((g: GameState, aiPlayer: YachtAI | null) => {
+    if (!aiPlayer || g.get_current_player() !== 0) {
+      setRecommendedCategories([])
+      setRecommendedHolds([])
+      return
+    }
+
+    // ロール後のみ推奨を表示
+    if (g.get_rolls_left() === 3) {
+      setRecommendedCategories([])
+      setRecommendedHolds([])
+      return
+    }
+
+    try {
+      // カテゴリ推奨
+      const catJson = aiPlayer.get_top_category_choices(g)
+      const categories: CategoryRecommendation[] = JSON.parse(catJson)
+      setRecommendedCategories(categories)
+
+      // キープ推奨（まだ振れる場合のみ）
+      if (g.get_rolls_left() > 0) {
+        const holdJson = aiPlayer.get_top_hold_choices(g)
+        const holds: HoldRecommendation[] = JSON.parse(holdJson)
+        setRecommendedHolds(holds)
+      } else {
+        setRecommendedHolds([])
+      }
+    } catch (e) {
+      console.error('Failed to get recommendations:', e)
+    }
   }, [])
 
   // ゲーム状態の同期
@@ -88,7 +136,7 @@ function App() {
 
   // サイコロを振る
   const rollDice = useCallback(() => {
-    if (!game || rollsLeft === 0 || phase !== 'playing') return
+    if (!game || !ai || rollsLeft === 0 || phase !== 'playing') return
 
     setRolling(true)
 
@@ -103,6 +151,7 @@ function App() {
         clearInterval(animInterval)
         game.roll_dice()
         syncGameState(game)
+        updateRecommendations(game, ai)
         setRolling(false)
 
         if (game.get_rolls_left() === 0) {
@@ -112,7 +161,7 @@ function App() {
         }
       }
     }, 35)
-  }, [game, rollsLeft, phase, diceHolds, syncGameState])
+  }, [game, ai, rollsLeft, phase, diceHolds, syncGameState, updateRecommendations])
 
   // サイコロをホールド（ロールで確定したキープは解除不可）
   const toggleHold = useCallback((index: number) => {
@@ -136,6 +185,9 @@ function App() {
   // AIのターンを実行（アニメーション付き）
   const executeAiTurn = useCallback(async (g: GameState, aiPlayer: YachtAI) => {
     setPhase('ai_turn')
+    // 推奨表示をクリア
+    setRecommendedCategories([])
+    setRecommendedHolds([])
 
     // 1回目のロール
     setMessage('AIがサイコロを振っています...')
@@ -304,6 +356,50 @@ function App() {
               >
                 {rollsLeft === 3 ? 'サイコロを振る' : '振り直す'}
               </button>
+
+              {/* 推奨表示トグルボタン（ゲーム中は常に表示） */}
+              {phase !== 'loading' && (
+                <div className="recommendations-toggle-area">
+                  <button
+                    className={`toggle-recommendations ${showRecommendations ? 'active' : ''}`}
+                    onClick={() => setShowRecommendations(!showRecommendations)}
+                  >
+                    {showRecommendations ? '推奨を非表示' : '推奨を表示'}
+                  </button>
+                </div>
+              )}
+
+              {/* 推奨表示エリア */}
+              {showRecommendations && phase === 'playing' && (recommendedHolds.length > 0 || recommendedCategories.length > 0) && (
+                <div className="recommendations">
+                  <div className="recommendations-header">
+                    <span>{rollsLeft > 0 ? '推奨キープ' : '推奨カテゴリ'}</span>
+                  </div>
+                  {/* 推奨キープ（まだ振れる場合） */}
+                  {rollsLeft > 0 && recommendedHolds.map((rec, idx) => (
+                    <div key={idx} className={`recommendation-item ${idx === 0 ? 'best' : ''}`}>
+                      <span className="rank">{idx + 1}.</span>
+                      <span className="hold-pattern">
+                        {rec.holds.map((h, i) => (
+                          <span key={i} className={`hold-indicator ${h === 1 ? 'keep' : 'reroll'}`}>
+                            {diceValues[i]}
+                          </span>
+                        ))}
+                      </span>
+                      <span className="expected">期待値: {rec.expected.toFixed(1)}</span>
+                    </div>
+                  ))}
+                  {/* 推奨カテゴリ（振り終わった場合） */}
+                  {rollsLeft === 0 && recommendedCategories.map((rec, idx) => (
+                    <div key={idx} className={`recommendation-item ${idx === 0 ? 'best' : ''}`}>
+                      <span className="rank">{idx + 1}.</span>
+                      <span className="category-name">{get_category_name_ja(rec.category)}</span>
+                      <span className="score-info">({rec.score}点)</span>
+                      <span className="expected">期待値: {rec.expected.toFixed(1)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* スコアボード */}
@@ -318,22 +414,31 @@ function App() {
                 </thead>
                 <tbody>
                   {/* 上段 */}
-                  {[0, 1, 2, 3, 4, 5].map(i => (
-                    <tr key={i} className={playerScores[i] === null && currentPlayer === 0 && rollsLeft < 3 ? 'selectable' : ''}>
-                      <td className="category-name">{get_category_name_ja(i)}</td>
-                      <td
-                        className={`score player-score ${playerScores[i] === null ? 'empty' : ''}`}
-                        onClick={() => selectCategory(i)}
+                  {[0, 1, 2, 3, 4, 5].map(i => {
+                    const recIndex = recommendedCategories.findIndex(r => r.category === i)
+                    const isRecommended = showRecommendations && recIndex !== -1
+                    const canSelect = playerScores[i] === null && currentPlayer === 0 && rollsLeft < 3
+                    return (
+                      <tr
+                        key={i}
+                        className={`${canSelect ? 'selectable' : ''} ${isRecommended ? `recommended rank-${recIndex + 1}` : ''}`}
+                        onClick={() => canSelect && selectCategory(i)}
                       >
-                        {playerScores[i] !== null
-                          ? playerScores[i]
-                          : (rollsLeft < 3 && currentPlayer === 0 ? <span className="potential">{getPotentialScore(i)}</span> : '-')}
-                      </td>
-                      <td className={`score ai-score ${aiScores[i] === null ? 'empty' : ''} ${highlightCategory === i ? 'highlight' : ''}`}>
-                        {aiScores[i] !== null ? aiScores[i] : '-'}
-                      </td>
-                    </tr>
-                  ))}
+                        <td className="category-name">
+                          {get_category_name_ja(i)}
+                          {isRecommended && <span className={`rec-badge rank-${recIndex + 1}`}>{recIndex + 1}</span>}
+                        </td>
+                        <td className={`score player-score ${playerScores[i] === null ? 'empty' : ''}`}>
+                          {playerScores[i] !== null
+                            ? playerScores[i]
+                            : (rollsLeft < 3 && currentPlayer === 0 ? <span className="potential">{getPotentialScore(i)}</span> : '-')}
+                        </td>
+                        <td className={`score ai-score ${aiScores[i] === null ? 'empty' : ''} ${highlightCategory === i ? 'highlight' : ''}`}>
+                          {aiScores[i] !== null ? aiScores[i] : '-'}
+                        </td>
+                      </tr>
+                    )
+                  })}
                   <tr className="subtotal">
                     <td>上段小計</td>
                     <td>{playerUpperTotal}</td>
@@ -346,22 +451,31 @@ function App() {
                   </tr>
 
                   {/* 下段 */}
-                  {[6, 7, 8, 9, 10, 11].map(i => (
-                    <tr key={i} className={playerScores[i] === null && currentPlayer === 0 && rollsLeft < 3 ? 'selectable' : ''}>
-                      <td className="category-name">{get_category_name_ja(i)}</td>
-                      <td
-                        className={`score player-score ${playerScores[i] === null ? 'empty' : ''}`}
-                        onClick={() => selectCategory(i)}
+                  {[6, 7, 8, 9, 10, 11].map(i => {
+                    const recIndex = recommendedCategories.findIndex(r => r.category === i)
+                    const isRecommended = showRecommendations && recIndex !== -1
+                    const canSelect = playerScores[i] === null && currentPlayer === 0 && rollsLeft < 3
+                    return (
+                      <tr
+                        key={i}
+                        className={`${canSelect ? 'selectable' : ''} ${isRecommended ? `recommended rank-${recIndex + 1}` : ''}`}
+                        onClick={() => canSelect && selectCategory(i)}
                       >
-                        {playerScores[i] !== null
-                          ? playerScores[i]
-                          : (rollsLeft < 3 && currentPlayer === 0 ? <span className="potential">{getPotentialScore(i)}</span> : '-')}
-                      </td>
-                      <td className={`score ai-score ${aiScores[i] === null ? 'empty' : ''} ${highlightCategory === i ? 'highlight' : ''}`}>
-                        {aiScores[i] !== null ? aiScores[i] : '-'}
-                      </td>
-                    </tr>
-                  ))}
+                        <td className="category-name">
+                          {get_category_name_ja(i)}
+                          {isRecommended && <span className={`rec-badge rank-${recIndex + 1}`}>{recIndex + 1}</span>}
+                        </td>
+                        <td className={`score player-score ${playerScores[i] === null ? 'empty' : ''}`}>
+                          {playerScores[i] !== null
+                            ? playerScores[i]
+                            : (rollsLeft < 3 && currentPlayer === 0 ? <span className="potential">{getPotentialScore(i)}</span> : '-')}
+                        </td>
+                        <td className={`score ai-score ${aiScores[i] === null ? 'empty' : ''} ${highlightCategory === i ? 'highlight' : ''}`}>
+                          {aiScores[i] !== null ? aiScores[i] : '-'}
+                        </td>
+                      </tr>
+                    )
+                  })}
                   <tr className="total">
                     <td>合計</td>
                     <td className="player-total">{playerTotal}</td>

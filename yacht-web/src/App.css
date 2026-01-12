@@ -5,15 +5,15 @@
 .app {
   max-width: 900px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 10px 20px;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 h1 {
   text-align: center;
   color: #2c3e50;
-  font-size: 2.5rem;
-  margin-bottom: 10px;
+  font-size: 2rem;
+  margin: 5px 0;
 }
 
 .loading {
@@ -65,18 +65,18 @@ h1 {
 /* メッセージ */
 .message {
   text-align: center;
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   color: #2c3e50;
-  padding: 15px;
+  padding: 8px;
   background: #f8f9fa;
-  border-radius: 10px;
-  margin-bottom: 20px;
+  border-radius: 8px;
+  margin-bottom: 10px;
 }
 
 /* ゲームエリア */
 .game-area {
   display: flex;
-  gap: 30px;
+  gap: 20px;
   flex-wrap: wrap;
   justify-content: center;
 }
@@ -91,9 +91,9 @@ h1 {
 .dice-container {
   display: flex;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .die {
@@ -193,16 +193,16 @@ h1 {
 
 .roll-info {
   text-align: center;
-  font-size: 1.1rem;
+  font-size: 1rem;
   color: #666;
-  margin-bottom: 15px;
+  margin-bottom: 8px;
 }
 
 .roll-button {
   display: block;
   width: 100%;
-  padding: 15px;
-  font-size: 1.1rem;
+  padding: 12px;
+  font-size: 1rem;
   background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
   color: white;
   border: none;
@@ -239,14 +239,16 @@ h1 {
 .scoreboard th {
   background: #2c3e50;
   color: white;
-  padding: 12px 8px;
+  padding: 8px 6px;
   font-weight: 600;
+  font-size: 0.9rem;
 }
 
 .scoreboard td {
-  padding: 10px 8px;
+  padding: 6px;
   border-bottom: 1px solid #eee;
   text-align: center;
+  font-size: 0.9rem;
 }
 
 .scoreboard .category-name {
@@ -257,10 +259,16 @@ h1 {
 
 .scoreboard tr.selectable {
   background: #f0f8ff;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
 .scoreboard tr.selectable:hover {
-  background: #e0f0ff;
+  background: #cce5ff;
+}
+
+.scoreboard tr.selectable:hover td {
+  color: #004085;
 }
 
 .score {
@@ -323,6 +331,171 @@ h1 {
 
 .scoreboard tr.total .ai-total {
   color: #f1948a;
+}
+
+/* 推奨表示 */
+.recommendations {
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 15px;
+  border: 1px solid #ddd;
+}
+
+.recommendations-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+/* 推奨表示トグルエリア */
+.recommendations-toggle-area {
+  margin-top: 15px;
+  text-align: center;
+}
+
+.toggle-recommendations {
+  background: #95a5a6;
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 5px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.toggle-recommendations:hover {
+  background: #7f8c8d;
+}
+
+.toggle-recommendations.active {
+  background: #3498db;
+}
+
+.toggle-recommendations.active:hover {
+  background: #2980b9;
+}
+
+.recommendation-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  margin-bottom: 3px;
+  background: white;
+  font-size: 0.85rem;
+}
+
+.recommendation-item.best {
+  background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
+  border: 1px solid #f1c40f;
+}
+
+.recommendation-item .rank {
+  font-weight: 700;
+  color: #7f8c8d;
+  min-width: 20px;
+}
+
+.recommendation-item.best .rank {
+  color: #f39c12;
+}
+
+.recommendation-item .expected {
+  margin-left: auto;
+  color: #27ae60;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.recommendation-item .score-info {
+  color: #7f8c8d;
+  font-size: 0.85rem;
+}
+
+/* キープ推奨のサイコロ表示 */
+.hold-pattern {
+  display: flex;
+  gap: 4px;
+}
+
+.hold-indicator {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.hold-indicator.keep {
+  background: #e74c3c;
+  color: white;
+}
+
+.hold-indicator.reroll {
+  background: #ecf0f1;
+  color: #7f8c8d;
+}
+
+/* カテゴリ推奨バッジ */
+.rec-badge {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-left: 6px;
+  color: white;
+}
+
+.rec-badge.rank-1 {
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+}
+
+.rec-badge.rank-2 {
+  background: linear-gradient(135deg, #bdc3c7 0%, #95a5a6 100%);
+}
+
+.rec-badge.rank-3 {
+  background: linear-gradient(135deg, #cd6133 0%, #a04000 100%);
+}
+
+/* 推奨カテゴリの行ハイライト */
+.scoreboard tr.recommended.rank-1 {
+  background: linear-gradient(90deg, #fff9e6 0%, transparent 100%);
+}
+
+.scoreboard tr.recommended.rank-2 {
+  background: linear-gradient(90deg, #f8f9fa 0%, transparent 100%);
+}
+
+.scoreboard tr.recommended.rank-3 {
+  background: linear-gradient(90deg, #fdf2e9 0%, transparent 100%);
+}
+
+/* 推奨行のホバースタイル */
+.scoreboard tr.selectable.recommended.rank-1:hover {
+  background: linear-gradient(90deg, #ffe066 0%, #cce5ff 100%);
+}
+
+.scoreboard tr.selectable.recommended.rank-2:hover {
+  background: linear-gradient(90deg, #dee2e6 0%, #cce5ff 100%);
+}
+
+.scoreboard tr.selectable.recommended.rank-3:hover {
+  background: linear-gradient(90deg, #f5cba7 0%, #cce5ff 100%);
 }
 
 /* レスポンシブ */

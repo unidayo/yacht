@@ -48,12 +48,28 @@ export class GameState {
   select_category(category_index: number): boolean;
   get_player_score(category_index: number): number;
   get_player_total(): number;
+  /**
+   * AI用: AIの使用済みカテゴリマスク
+   */
+  ai_used_hands_mask(): number;
   get_ai_upper_bonus(): number;
   get_ai_upper_total(): number;
   get_current_player(): number;
+  /**
+   * AI用: 現在のAIの上段累計スコア（63上限）
+   */
+  ai_upper_sum_capped(): number;
   get_potential_score(category_index: number): number;
   get_player_upper_bonus(): number;
   get_player_upper_total(): number;
+  /**
+   * プレイヤー用: 使用済みカテゴリマスク
+   */
+  player_used_hands_mask(): number;
+  /**
+   * プレイヤー用: 上段累計スコア（63上限）
+   */
+  player_upper_sum_capped(): number;
   get_available_categories(): Uint8Array;
   constructor();
   to_json(): string;
@@ -67,6 +83,14 @@ export class ScoreBoard {
   get_lower_total(): number;
   get_upper_bonus(): number;
   get_upper_total(): number;
+  /**
+   * 使用済みカテゴリのビットマスクを取得
+   */
+  used_hands_mask(): number;
+  /**
+   * 上段スコアの累計を取得（63上限）
+   */
+  upper_sum_capped(): number;
   available_categories(): Uint8Array;
   constructor();
   is_used(category: Category): boolean;
@@ -78,9 +102,34 @@ export class ScoreBoard {
 export class YachtAI {
   free(): void;
   [Symbol.dispose](): void;
+  /**
+   * AIが選ぶべきホールドパターンを取得（JS用）
+   */
   get_holds_decision(game: GameState): Uint8Array;
+  /**
+   * プレイヤー向け: キープパターンの上位3つを取得
+   * 戻り値: JSON配列 [{"holds": [0,1,1,0,1], "expected": value}, ...]
+   * expected は最終的な合計点数の期待値
+   */
+  get_top_hold_choices(game: GameState): string;
+  /**
+   * AIが選ぶべきカテゴリを取得（JS用）
+   */
   get_category_decision(game: GameState): number;
+  /**
+   * プレイヤー向け: カテゴリ選択の上位3つを取得
+   * 戻り値: JSON配列 [{"category": index, "score": immediate, "expected": value}, ...]
+   * expected は最終的な合計点数の期待値
+   */
+  get_top_category_choices(game: GameState): string;
+  /**
+   * プレイヤー向け: 現在の状態からの総合期待値を取得
+   */
+  get_player_expected_score(game: GameState): number;
   constructor();
+  /**
+   * AIの手番を実行（ロールとカテゴリ選択を含む）
+   */
   play_turn(game: GameState): string;
 }
 
@@ -111,6 +160,8 @@ export interface InitOutput {
   readonly dice_set_hold: (a: number, b: number, c: number) => void;
   readonly dice_set_values: (a: number, b: number, c: number) => void;
   readonly dice_toggle_hold: (a: number, b: number) => void;
+  readonly gamestate_ai_upper_sum_capped: (a: number) => number;
+  readonly gamestate_ai_used_hands_mask: (a: number) => number;
   readonly gamestate_get_ai_score: (a: number, b: number) => number;
   readonly gamestate_get_ai_total: (a: number) => number;
   readonly gamestate_get_ai_upper_bonus: (a: number) => number;
@@ -128,6 +179,8 @@ export interface InitOutput {
   readonly gamestate_get_rolls_left: (a: number) => number;
   readonly gamestate_is_game_over: (a: number) => number;
   readonly gamestate_new: () => number;
+  readonly gamestate_player_upper_sum_capped: (a: number) => number;
+  readonly gamestate_player_used_hands_mask: (a: number) => number;
   readonly gamestate_roll_dice: (a: number) => number;
   readonly gamestate_select_category: (a: number, b: number) => number;
   readonly gamestate_to_json: (a: number) => [number, number];
@@ -144,8 +197,13 @@ export interface InitOutput {
   readonly scoreboard_is_used: (a: number, b: number) => number;
   readonly scoreboard_new: () => number;
   readonly scoreboard_set_score: (a: number, b: number, c: number) => number;
+  readonly scoreboard_upper_sum_capped: (a: number) => number;
+  readonly scoreboard_used_hands_mask: (a: number) => number;
   readonly yachtai_get_category_decision: (a: number, b: number) => number;
   readonly yachtai_get_holds_decision: (a: number, b: number) => [number, number];
+  readonly yachtai_get_player_expected_score: (a: number, b: number) => number;
+  readonly yachtai_get_top_category_choices: (a: number, b: number) => [number, number];
+  readonly yachtai_get_top_hold_choices: (a: number, b: number) => [number, number];
   readonly yachtai_play_turn: (a: number, b: number) => [number, number];
   readonly gamestate_reset_holds: (a: number) => void;
   readonly yachtai_new: () => number;

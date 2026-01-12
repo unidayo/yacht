@@ -2,6 +2,8 @@ use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
 use rand::Rng;
 
+mod dp_table;
+
 // ヨットの役（カテゴリ）
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -288,6 +290,22 @@ impl ScoreBoard {
     pub fn is_complete(&self) -> bool {
         self.scores.iter().all(|s| s.is_some())
     }
+
+    /// 使用済みカテゴリのビットマスクを取得
+    pub fn used_hands_mask(&self) -> usize {
+        let mut mask = 0usize;
+        for (i, s) in self.scores.iter().enumerate() {
+            if s.is_some() {
+                mask |= 1 << i;
+            }
+        }
+        mask
+    }
+
+    /// 上段スコアの累計を取得（63上限）
+    pub fn upper_sum_capped(&self) -> usize {
+        self.get_upper_total().min(63) as usize
+    }
 }
 
 impl Default for ScoreBoard {
@@ -456,6 +474,26 @@ impl GameState {
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap_or_default()
     }
+
+    /// AI用: 現在のAIの上段累計スコア（63上限）
+    pub fn ai_upper_sum_capped(&self) -> usize {
+        self.ai_score.upper_sum_capped()
+    }
+
+    /// AI用: AIの使用済みカテゴリマスク
+    pub fn ai_used_hands_mask(&self) -> usize {
+        self.ai_score.used_hands_mask()
+    }
+
+    /// プレイヤー用: 上段累計スコア（63上限）
+    pub fn player_upper_sum_capped(&self) -> usize {
+        self.player_score.upper_sum_capped()
+    }
+
+    /// プレイヤー用: 使用済みカテゴリマスク
+    pub fn player_used_hands_mask(&self) -> usize {
+        self.player_score.used_hands_mask()
+    }
 }
 
 impl Default for GameState {
@@ -464,7 +502,51 @@ impl Default for GameState {
     }
 }
 
-// ========== AI Engine ==========
+// ========== AI Engine (DPテーブルベース) ==========
+
+/// 出目パターンから得点を計算
+fn calculate_score_from_pattern(pattern: &dp_table::DicePattern, category: Category) -> u8 {
+    match category {
+        Category::Ones => pattern[0] * 1,
+        Category::Twos => pattern[1] * 2,
+        Category::Threes => pattern[2] * 3,
+        Category::Fours => pattern[3] * 4,
+        Category::Fives => pattern[4] * 5,
+        Category::Sixes => pattern[5] * 6,
+        Category::FullHouse => {
+            let has_three = pattern.iter().any(|&c| c == 3);
+            let has_two = pattern.iter().any(|&c| c == 2);
+            if has_three && has_two {
+                dp_table::pattern_pips(pattern)
+            } else {
+                0
+            }
+        }
+        Category::FourOfAKind => {
+            if pattern.iter().any(|&c| c >= 4) {
+                dp_table::pattern_pips(pattern)
+            } else {
+                0
+            }
+        }
+        Category::LittleStraight => {
+            // 4連続: 1-4, 2-5, 3-6
+            let has_1234 = pattern[0] >= 1 && pattern[1] >= 1 && pattern[2] >= 1 && pattern[3] >= 1;
+            let has_2345 = pattern[1] >= 1 && pattern[2] >= 1 && pattern[3] >= 1 && pattern[4] >= 1;
+            let has_3456 = pattern[2] >= 1 && pattern[3] >= 1 && pattern[4] >= 1 && pattern[5] >= 1;
+            if has_1234 || has_2345 || has_3456 { 15 } else { 0 }
+        }
+        Category::BigStraight => {
+            let has_12345 = pattern[0] >= 1 && pattern[1] >= 1 && pattern[2] >= 1 && pattern[3] >= 1 && pattern[4] >= 1;
+            let has_23456 = pattern[1] >= 1 && pattern[2] >= 1 && pattern[3] >= 1 && pattern[4] >= 1 && pattern[5] >= 1;
+            if has_12345 || has_23456 { 30 } else { 0 }
+        }
+        Category::Choice => dp_table::pattern_pips(pattern),
+        Category::Yacht => {
+            if pattern.iter().any(|&c| c == 5) { 50 } else { 0 }
+        }
+    }
+}
 
 #[wasm_bindgen]
 pub struct YachtAI {}
@@ -476,7 +558,7 @@ impl YachtAI {
         YachtAI {}
     }
 
-    // AIの手番を実行（ロールとカテゴリ選択を含む）
+    /// AIの手番を実行（ロールとカテゴリ選択を含む）
     pub fn play_turn(&self, game: &mut GameState) -> String {
         let mut actions = Vec::new();
 
@@ -516,234 +598,317 @@ impl YachtAI {
         actions.join("\n")
     }
 
-    // AIが選ぶべきホールドパターンを取得（JS用）
+    /// AIが選ぶべきホールドパターンを取得（JS用）
     pub fn get_holds_decision(&self, game: &GameState) -> Vec<u8> {
         self.decide_holds(game).iter().map(|&h| if h { 1 } else { 0 }).collect()
     }
 
-    // AIが選ぶべきカテゴリを取得（JS用）
+    /// AIが選ぶべきカテゴリを取得（JS用）
     pub fn get_category_decision(&self, game: &GameState) -> usize {
         self.decide_category(game)
     }
 
-    // どのサイコロを保持するか決定
+    /// どのサイコロを保持するか決定（DPテーブルベース）
     fn decide_holds(&self, game: &GameState) -> Vec<bool> {
         let dice = game.get_dice_values();
-        let available = game.get_available_categories();
+        let rolls_left = game.get_rolls_left();
+        let upper_sum = game.ai_upper_sum_capped();
+        let used_hands = game.ai_used_hands_mask();
+
+        let current_pattern = dp_table::dice_to_pattern(&dice);
+        let keep_patterns = dp_table::enumerate_keep_patterns(&current_pattern);
 
         let mut best_holds = vec![false; 5];
-        let mut best_expected = f64::NEG_INFINITY;
+        let mut best_expected = f32::NEG_INFINITY;
 
-        // 全ての保持パターン（2^5 = 32通り）を評価
-        for hold_mask in 0u8..32 {
-            let holds: Vec<bool> = (0..5).map(|i| (hold_mask >> i) & 1 == 1).collect();
-            let expected = self.evaluate_hold_pattern(&dice, &holds, &available);
+        let no_locks: [bool; 5] = [false; 5];
+        for keep in &keep_patterns {
+            let expected = if rolls_left == 1 {
+                self.evaluate_final_roll(keep, upper_sum, used_hands)
+            } else {
+                // rolls_left == 2: 2回振り直し可能
+                self.evaluate_two_rolls(keep, upper_sum, used_hands)
+            };
 
             if expected > best_expected {
                 best_expected = expected;
-                best_holds = holds;
+                // キープパターンからホールド配列を復元
+                best_holds = self.pattern_to_holds(&dice, keep, &no_locks);
             }
         }
 
         best_holds
     }
 
-    // 保持パターンの期待値を計算
-    fn evaluate_hold_pattern(&self, dice: &[u8], holds: &[bool], available: &[u8]) -> f64 {
-        let held_dice: Vec<u8> = dice.iter()
-            .enumerate()
-            .filter(|(i, _)| holds[*i])
-            .map(|(_, &v)| v)
-            .collect();
-
-        let num_reroll = 5 - held_dice.len();
-
+    /// 最終振り（1回）の期待値
+    fn evaluate_final_roll(
+        &self,
+        keep: &dp_table::DicePattern,
+        upper_sum: usize,
+        used_hands: usize,
+    ) -> f32 {
+        let num_reroll = 5 - dp_table::pattern_count(keep) as usize;
         if num_reroll == 0 {
-            // 全部保持なら、最良のカテゴリスコアを返す
-            let dice_arr: [u8; 5] = [dice[0], dice[1], dice[2], dice[3], dice[4]];
-            return self.best_category_score(&dice_arr, available) as f64;
+            return self.best_category_value(keep, upper_sum, used_hands);
         }
 
-        // リロール結果の期待値を計算
-        let mut total_expected = 0.0;
-        let total_outcomes = 6_u32.pow(num_reroll as u32);
+        let patterns = dp_table::dice_patterns::get_patterns(num_reroll);
+        let mut total = 0.0f32;
 
-        self.enumerate_reroll_outcomes(&held_dice, num_reroll, available, &mut total_expected);
-
-        total_expected / total_outcomes as f64
-    }
-
-    // リロール結果を列挙して期待値を計算
-    fn enumerate_reroll_outcomes(&self, held: &[u8], num_reroll: usize, available: &[u8], total: &mut f64) {
-        let mut reroll = vec![1u8; num_reroll];
-
-        loop {
-            // 現在の組み合わせでの最良スコア
-            let mut all_dice: Vec<u8> = held.to_vec();
-            all_dice.extend(&reroll);
-            all_dice.sort();
-
-            let dice_arr: [u8; 5] = [all_dice[0], all_dice[1], all_dice[2], all_dice[3], all_dice[4]];
-            *total += self.best_category_score(&dice_arr, available) as f64;
-
-            // 次の組み合わせ
-            let mut carry = true;
-            for i in 0..num_reroll {
-                if carry {
-                    reroll[i] += 1;
-                    if reroll[i] > 6 {
-                        reroll[i] = 1;
-                    } else {
-                        carry = false;
-                    }
-                }
-            }
-            if carry {
-                break;
-            }
+        for pp in patterns {
+            let final_dice = dp_table::add_patterns(keep, &pp.pattern);
+            let value = self.best_category_value(&final_dice, upper_sum, used_hands);
+            total += pp.probability * value;
         }
+
+        total
     }
 
-    // 最良のカテゴリとそのスコアを返す
-    fn best_category_score(&self, dice: &[u8; 5], available: &[u8]) -> u8 {
-        let mut best_score = 0u8;
+    /// 2回振り直しの期待値
+    fn evaluate_two_rolls(
+        &self,
+        keep: &dp_table::DicePattern,
+        upper_sum: usize,
+        used_hands: usize,
+    ) -> f32 {
+        let num_reroll = 5 - dp_table::pattern_count(keep) as usize;
+        if num_reroll == 0 {
+            return self.best_category_value(keep, upper_sum, used_hands);
+        }
 
-        for &cat_idx in available {
-            if let Some(category) = Category::from_index(cat_idx as usize) {
-                let score = calculate_score(dice, category);
+        let patterns = dp_table::dice_patterns::get_patterns(num_reroll);
+        let mut total = 0.0f32;
 
-                // カテゴリの価値を調整（上段ボーナスを考慮）
-                let adjusted_score = self.adjust_score_for_strategy(dice, category, score);
+        for pp in patterns {
+            let after_roll1 = dp_table::add_patterns(keep, &pp.pattern);
+            // この出目から最適なキープを選んで、さらに1回振る
+            let best_keep_value = self.find_best_keep_for_final(&after_roll1, upper_sum, used_hands);
+            total += pp.probability * best_keep_value;
+        }
 
-                if adjusted_score > best_score {
-                    best_score = adjusted_score;
-                }
+        total
+    }
+
+    /// 最終振り前の最適キープ期待値
+    fn find_best_keep_for_final(
+        &self,
+        dice_pattern: &dp_table::DicePattern,
+        upper_sum: usize,
+        used_hands: usize,
+    ) -> f32 {
+        let keep_patterns = dp_table::enumerate_keep_patterns(dice_pattern);
+        let mut best = f32::NEG_INFINITY;
+
+        for keep in &keep_patterns {
+            let value = self.evaluate_final_roll(keep, upper_sum, used_hands);
+            if value > best {
+                best = value;
             }
         }
 
-        best_score
+        best
     }
 
-    // 戦略的なスコア調整
-    fn adjust_score_for_strategy(&self, _dice: &[u8; 5], category: Category, score: u8) -> u8 {
-        match category {
-            // 上段カテゴリ：目標値（n×3）に対する達成度で加点
-            Category::Ones => {
-                if score >= 3 { score + 2 } else { score }
+    /// 出目パターンに対する最良カテゴリの価値
+    fn best_category_value(
+        &self,
+        dice: &dp_table::DicePattern,
+        upper_sum: usize,
+        used_hands: usize,
+    ) -> f32 {
+        let mut best = f32::NEG_INFINITY;
+
+        for cat_idx in 0..12 {
+            if (used_hands >> cat_idx) & 1 == 1 {
+                continue;
             }
-            Category::Twos => {
-                if score >= 6 { score + 2 } else { score }
+            let category = Category::from_index(cat_idx).unwrap();
+            let score = calculate_score_from_pattern(dice, category);
+            let value = dp_table::evaluate_category_choice(upper_sum, used_hands, cat_idx, score);
+            if value > best {
+                best = value;
             }
-            Category::Threes => {
-                if score >= 9 { score + 2 } else { score }
-            }
-            Category::Fours => {
-                if score >= 12 { score + 2 } else { score }
-            }
-            Category::Fives => {
-                if score >= 15 { score + 2 } else { score }
-            }
-            Category::Sixes => {
-                if score >= 18 { score + 2 } else { score }
-            }
-            // Yachtは高価値
-            Category::Yacht => {
-                if score == 50 { 55 } else { 0 }
-            }
-            // ストレートも高価値
-            Category::LittleStraight => {
-                if score == 15 { 17 } else { 0 }
-            }
-            Category::BigStraight => {
-                if score == 30 { 33 } else { 0 }
-            }
-            _ => score,
         }
+
+        best
     }
 
-    // カテゴリを選択
+    /// キープパターンからホールド配列を復元
+    /// locks: ロックされたダイス（同じ目が複数ある場合にロック済みを優先キープ）
+    fn pattern_to_holds(&self, dice: &[u8], keep: &dp_table::DicePattern, locks: &[bool]) -> Vec<bool> {
+        let mut holds = vec![false; 5];
+        let mut remaining = *keep;
+
+        // 第1パス: ロックされたダイスを優先的にキープ
+        for (i, &d) in dice.iter().enumerate() {
+            let face = (d - 1) as usize;
+            if locks.get(i).copied().unwrap_or(false) && remaining[face] > 0 {
+                holds[i] = true;
+                remaining[face] -= 1;
+            }
+        }
+
+        // 第2パス: 残りのキープ枠をロックされていないダイスに割り当て
+        for (i, &d) in dice.iter().enumerate() {
+            let face = (d - 1) as usize;
+            if !locks.get(i).copied().unwrap_or(false) && remaining[face] > 0 {
+                holds[i] = true;
+                remaining[face] -= 1;
+            }
+        }
+
+        holds
+    }
+
+    /// カテゴリを選択（DPテーブルベース）
     fn decide_category(&self, game: &GameState) -> usize {
         let dice = game.get_dice_values();
-        let dice_arr: [u8; 5] = [dice[0], dice[1], dice[2], dice[3], dice[4]];
-        let available = game.get_available_categories();
+        let upper_sum = game.ai_upper_sum_capped();
+        let used_hands = game.ai_used_hands_mask();
+        let pattern = dp_table::dice_to_pattern(&dice);
 
-        let mut best_category = available[0] as usize;
-        let mut best_value = f64::NEG_INFINITY;
+        let mut best_category = 0;
+        let mut best_value = f32::NEG_INFINITY;
 
-        for &cat_idx in &available {
-            if let Some(category) = Category::from_index(cat_idx as usize) {
-                let score = calculate_score(&dice_arr, category);
-                let value = self.evaluate_category_choice(category, score, &available);
+        for cat_idx in 0..12 {
+            if (used_hands >> cat_idx) & 1 == 1 {
+                continue;
+            }
+            let category = Category::from_index(cat_idx).unwrap();
+            let score = calculate_score_from_pattern(&pattern, category);
+            let value = dp_table::evaluate_category_choice(upper_sum, used_hands, cat_idx, score);
 
-                if value > best_value {
-                    best_value = value;
-                    best_category = cat_idx as usize;
-                }
+            if value > best_value {
+                best_value = value;
+                best_category = cat_idx;
             }
         }
 
         best_category
     }
 
-    // カテゴリ選択の価値を評価
-    fn evaluate_category_choice(&self, category: Category, score: u8, available: &[u8]) -> f64 {
-        let base_score = score as f64;
+    // ========== プレイヤー向け推奨機能 ==========
 
-        // 上段カテゴリの場合、ボーナス達成への影響を考慮
-        let bonus_factor = match category {
-            Category::Ones => {
-                let target = 3.0;
-                let achieved = score as f64;
-                (achieved - target) * 0.5 // 目標との差分で評価
-            }
-            Category::Twos => {
-                let target = 6.0;
-                let achieved = score as f64;
-                (achieved - target) * 0.5
-            }
-            Category::Threes => {
-                let target = 9.0;
-                let achieved = score as f64;
-                (achieved - target) * 0.5
-            }
-            Category::Fours => {
-                let target = 12.0;
-                let achieved = score as f64;
-                (achieved - target) * 0.5
-            }
-            Category::Fives => {
-                let target = 15.0;
-                let achieved = score as f64;
-                (achieved - target) * 0.5
-            }
-            Category::Sixes => {
-                let target = 18.0;
-                let achieved = score as f64;
-                (achieved - target) * 0.5
-            }
-            _ => 0.0,
-        };
+    /// プレイヤー向け: カテゴリ選択の上位3つを取得
+    /// 戻り値: JSON配列 [{"category": index, "score": immediate, "expected": value}, ...]
+    /// expected は最終的な合計点数の期待値
+    pub fn get_top_category_choices(&self, game: &GameState) -> String {
+        let dice = game.get_dice_values();
+        let upper_sum = game.player_upper_sum_capped();
+        let used_hands = game.player_used_hands_mask();
+        let current_total = game.get_player_total() as f32;
+        let pattern = dp_table::dice_to_pattern(&dice);
 
-        // 0点で使う「捨てカテゴリ」の評価
-        let waste_penalty = if score == 0 {
-            match category {
-                Category::Yacht => -25.0, // Yachtは捨てるべきでない
-                Category::LittleStraight | Category::BigStraight => -15.0,
-                Category::FullHouse | Category::FourOfAKind => -10.0,
-                _ => -5.0,
+        let mut choices: Vec<(usize, u8, f32)> = Vec::new();
+
+        for cat_idx in 0..12 {
+            if (used_hands >> cat_idx) & 1 == 1 {
+                continue;
             }
-        } else {
-            0.0
-        };
+            let category = Category::from_index(cat_idx).unwrap();
+            let score = calculate_score_from_pattern(&pattern, category);
+            let future_value = dp_table::evaluate_category_choice(upper_sum, used_hands, cat_idx, score);
+            // 現在の合計 + 将来の期待値 = 最終的な合計点数の期待値
+            let total_expected = current_total + future_value;
+            choices.push((cat_idx, score, total_expected));
+        }
 
-        // 残りカテゴリ数による調整
-        let scarcity_bonus = if available.len() <= 3 {
-            base_score * 0.2 // 終盤は実スコア重視
-        } else {
-            0.0
-        };
+        // 期待値でソート（降順）
+        choices.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
 
-        base_score + bonus_factor + waste_penalty + scarcity_bonus
+        // 上位3つを取得
+        let top3: Vec<_> = choices.into_iter().take(3).collect();
+
+        // JSON形式で返す
+        let json_array: Vec<String> = top3
+            .iter()
+            .map(|(cat, score, expected)| {
+                format!(
+                    r#"{{"category":{},"score":{},"expected":{:.1}}}"#,
+                    cat, score, expected
+                )
+            })
+            .collect();
+
+        format!("[{}]", json_array.join(","))
+    }
+
+    /// プレイヤー向け: キープパターンの上位3つを取得
+    /// 戻り値: JSON配列 [{"holds": [0,1,1,0,1], "expected": value}, ...]
+    /// expected は最終的な合計点数の期待値
+    pub fn get_top_hold_choices(&self, game: &GameState) -> String {
+        let dice = game.get_dice_values();
+        let locks = game.get_dice_locks();
+        let rolls_left = game.get_rolls_left();
+        let upper_sum = game.player_upper_sum_capped();
+        let used_hands = game.player_used_hands_mask();
+        let current_total = game.get_player_total() as f32;
+
+        // ロックされたダイスは必ずキープ
+        let locked: Vec<bool> = locks.iter().map(|&l| l == 1).collect();
+
+        let current_pattern = dp_table::dice_to_pattern(&dice);
+        let keep_patterns = dp_table::enumerate_keep_patterns(&current_pattern);
+
+        let mut choices: Vec<(Vec<bool>, f32)> = Vec::new();
+
+        for keep in &keep_patterns {
+            let holds = self.pattern_to_holds(&dice, keep, &locked);
+
+            // ロックされたダイスを解除するパターンはスキップ
+            let violates_lock = (0..5).any(|i| locked[i] && !holds[i]);
+            if violates_lock {
+                continue;
+            }
+
+            let future_expected = if rolls_left == 1 {
+                self.evaluate_final_roll(keep, upper_sum, used_hands)
+            } else {
+                self.evaluate_two_rolls(keep, upper_sum, used_hands)
+            };
+
+            // 現在の合計 + 将来の期待値 = 最終的な合計点数の期待値
+            let total_expected = current_total + future_expected;
+            choices.push((holds, total_expected));
+        }
+
+        // 期待値でソート（降順）
+        choices.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        // 上位3つを取得（重複を除去）
+        let mut top3: Vec<(Vec<bool>, f32)> = Vec::new();
+        let mut seen: std::collections::HashSet<Vec<bool>> = std::collections::HashSet::new();
+        for (holds, expected) in choices {
+            if !seen.contains(&holds) {
+                seen.insert(holds.clone());
+                top3.push((holds, expected));
+                if top3.len() >= 3 {
+                    break;
+                }
+            }
+        }
+
+        // JSON形式で返す
+        let json_array: Vec<String> = top3
+            .iter()
+            .map(|(holds, expected)| {
+                let holds_str: Vec<String> = holds.iter().map(|&h| if h { "1".to_string() } else { "0".to_string() }).collect();
+                format!(
+                    r#"{{"holds":[{}],"expected":{:.1}}}"#,
+                    holds_str.join(","),
+                    expected
+                )
+            })
+            .collect();
+
+        format!("[{}]", json_array.join(","))
+    }
+
+    /// プレイヤー向け: 現在の状態からの総合期待値を取得
+    pub fn get_player_expected_score(&self, game: &GameState) -> f32 {
+        let upper_sum = game.player_upper_sum_capped();
+        let used_hands = game.player_used_hands_mask();
+        dp_table::get_expected_score(upper_sum, used_hands)
     }
 }
 

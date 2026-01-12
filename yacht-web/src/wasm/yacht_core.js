@@ -298,6 +298,14 @@ export class GameState {
         return ret;
     }
     /**
+     * AI用: AIの使用済みカテゴリマスク
+     * @returns {number}
+     */
+    ai_used_hands_mask() {
+        const ret = wasm.gamestate_ai_used_hands_mask(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
      * @returns {number}
      */
     get_ai_upper_bonus() {
@@ -317,6 +325,14 @@ export class GameState {
     get_current_player() {
         const ret = wasm.gamestate_get_current_player(this.__wbg_ptr);
         return ret;
+    }
+    /**
+     * AI用: 現在のAIの上段累計スコア（63上限）
+     * @returns {number}
+     */
+    ai_upper_sum_capped() {
+        const ret = wasm.gamestate_ai_upper_sum_capped(this.__wbg_ptr);
+        return ret >>> 0;
     }
     /**
      * @param {number} category_index
@@ -339,6 +355,22 @@ export class GameState {
     get_player_upper_total() {
         const ret = wasm.gamestate_get_player_upper_total(this.__wbg_ptr);
         return ret;
+    }
+    /**
+     * プレイヤー用: 使用済みカテゴリマスク
+     * @returns {number}
+     */
+    player_used_hands_mask() {
+        const ret = wasm.gamestate_player_used_hands_mask(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * プレイヤー用: 上段累計スコア（63上限）
+     * @returns {number}
+     */
+    player_upper_sum_capped() {
+        const ret = wasm.gamestate_player_upper_sum_capped(this.__wbg_ptr);
+        return ret >>> 0;
     }
     /**
      * @returns {Uint8Array}
@@ -420,6 +452,22 @@ export class ScoreBoard {
         return ret;
     }
     /**
+     * 使用済みカテゴリのビットマスクを取得
+     * @returns {number}
+     */
+    used_hands_mask() {
+        const ret = wasm.scoreboard_used_hands_mask(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * 上段スコアの累計を取得（63上限）
+     * @returns {number}
+     */
+    upper_sum_capped() {
+        const ret = wasm.scoreboard_upper_sum_capped(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
      * @returns {Uint8Array}
      */
     available_categories() {
@@ -481,6 +529,7 @@ export class YachtAI {
         wasm.__wbg_yachtai_free(ptr, 0);
     }
     /**
+     * AIが選ぶべきホールドパターンを取得（JS用）
      * @param {GameState} game
      * @returns {Uint8Array}
      */
@@ -492,6 +541,27 @@ export class YachtAI {
         return v1;
     }
     /**
+     * プレイヤー向け: キープパターンの上位3つを取得
+     * 戻り値: JSON配列 [{"holds": [0,1,1,0,1], "expected": value}, ...]
+     * expected は最終的な合計点数の期待値
+     * @param {GameState} game
+     * @returns {string}
+     */
+    get_top_hold_choices(game) {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            _assertClass(game, GameState);
+            const ret = wasm.yachtai_get_top_hold_choices(this.__wbg_ptr, game.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * AIが選ぶべきカテゴリを取得（JS用）
      * @param {GameState} game
      * @returns {number}
      */
@@ -500,6 +570,36 @@ export class YachtAI {
         const ret = wasm.yachtai_get_category_decision(this.__wbg_ptr, game.__wbg_ptr);
         return ret >>> 0;
     }
+    /**
+     * プレイヤー向け: カテゴリ選択の上位3つを取得
+     * 戻り値: JSON配列 [{"category": index, "score": immediate, "expected": value}, ...]
+     * expected は最終的な合計点数の期待値
+     * @param {GameState} game
+     * @returns {string}
+     */
+    get_top_category_choices(game) {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            _assertClass(game, GameState);
+            const ret = wasm.yachtai_get_top_category_choices(this.__wbg_ptr, game.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * プレイヤー向け: 現在の状態からの総合期待値を取得
+     * @param {GameState} game
+     * @returns {number}
+     */
+    get_player_expected_score(game) {
+        _assertClass(game, GameState);
+        const ret = wasm.yachtai_get_player_expected_score(this.__wbg_ptr, game.__wbg_ptr);
+        return ret;
+    }
     constructor() {
         const ret = wasm.yachtai_new();
         this.__wbg_ptr = ret >>> 0;
@@ -507,6 +607,7 @@ export class YachtAI {
         return this;
     }
     /**
+     * AIの手番を実行（ロールとカテゴリ選択を含む）
      * @param {GameState} game
      * @returns {string}
      */
