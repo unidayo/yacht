@@ -323,6 +323,14 @@ function App() {
           <button className="start-button" onClick={startGame}>
             ゲーム開始
           </button>
+          <div className="recommendations-toggle-area">
+            <button
+              className={`toggle-recommendations ${showRecommendations ? 'active' : ''}`}
+              onClick={() => setShowRecommendations(!showRecommendations)}
+            >
+              {showRecommendations ? '推奨を非表示' : '推奨を表示'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -358,16 +366,14 @@ function App() {
               </button>
 
               {/* 推奨表示トグルボタン（ゲーム中は常に表示） */}
-              {phase !== 'loading' && (
-                <div className="recommendations-toggle-area">
-                  <button
-                    className={`toggle-recommendations ${showRecommendations ? 'active' : ''}`}
-                    onClick={() => setShowRecommendations(!showRecommendations)}
-                  >
-                    {showRecommendations ? '推奨を非表示' : '推奨を表示'}
-                  </button>
-                </div>
-              )}
+              <div className="recommendations-toggle-area">
+                <button
+                  className={`toggle-recommendations ${showRecommendations ? 'active' : ''}`}
+                  onClick={() => setShowRecommendations(!showRecommendations)}
+                >
+                  {showRecommendations ? '推奨を非表示' : '推奨を表示'}
+                </button>
+              </div>
 
               {/* 推奨表示エリア */}
               {showRecommendations && phase === 'playing' && (recommendedHolds.length > 0 || recommendedCategories.length > 0) && (

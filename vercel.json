@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd yacht-web && npm install && npm run build",
+  "outputDirectory": "yacht-web/dist",
+  "framework": null,
+  "installCommand": "echo 'Using custom build command'"
+}
