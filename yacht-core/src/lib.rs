@@ -152,22 +152,22 @@ impl Default for Dice {
 
 // 得点計算
 pub fn calculate_score(dice: &[u8; 5], category: Category) -> u8 {
-    let mut counts = [0u8; 7]; // index 1-6 for dice values
+    let mut counts = [0u8; 6]; // index 0-5 for dice values 1-6
     for &v in dice {
-        counts[v as usize] += 1;
+        counts[(v - 1) as usize] += 1;
     }
     let sum: u8 = dice.iter().sum();
 
     match category {
-        Category::Ones => counts[1] * 1,
-        Category::Twos => counts[2] * 2,
-        Category::Threes => counts[3] * 3,
-        Category::Fours => counts[4] * 4,
-        Category::Fives => counts[5] * 5,
-        Category::Sixes => counts[6] * 6,
+        Category::Ones => counts[0] * 1,
+        Category::Twos => counts[1] * 2,
+        Category::Threes => counts[2] * 3,
+        Category::Fours => counts[3] * 4,
+        Category::Fives => counts[4] * 5,
+        Category::Sixes => counts[5] * 6,
         Category::FullHouse => {
-            let has_three = counts[1..=6].iter().any(|&c| c == 3);
-            let has_two = counts[1..=6].iter().any(|&c| c == 2);
+            let has_three = counts.iter().any(|&c| c == 3);
+            let has_two = counts.iter().any(|&c| c == 2);
             if has_three && has_two {
                 sum
             } else {
@@ -176,7 +176,7 @@ pub fn calculate_score(dice: &[u8; 5], category: Category) -> u8 {
         }
         Category::FourOfAKind => {
             // 4つ以上同じ目があれば、全ての出目の合計
-            if counts[1..=6].iter().any(|&c| c >= 4) {
+            if counts.iter().any(|&c| c >= 4) {
                 sum
             } else {
                 0
@@ -184,9 +184,9 @@ pub fn calculate_score(dice: &[u8; 5], category: Category) -> u8 {
         }
         Category::LittleStraight => {
             // スモールストレート: 4つ連続で15点
-            let has_1234 = counts[1] >= 1 && counts[2] >= 1 && counts[3] >= 1 && counts[4] >= 1;
-            let has_2345 = counts[2] >= 1 && counts[3] >= 1 && counts[4] >= 1 && counts[5] >= 1;
-            let has_3456 = counts[3] >= 1 && counts[4] >= 1 && counts[5] >= 1 && counts[6] >= 1;
+            let has_1234 = counts[0] >= 1 && counts[1] >= 1 && counts[2] >= 1 && counts[3] >= 1;
+            let has_2345 = counts[1] >= 1 && counts[2] >= 1 && counts[3] >= 1 && counts[4] >= 1;
+            let has_3456 = counts[2] >= 1 && counts[3] >= 1 && counts[4] >= 1 && counts[5] >= 1;
             if has_1234 || has_2345 || has_3456 {
                 15
             } else {
@@ -195,8 +195,8 @@ pub fn calculate_score(dice: &[u8; 5], category: Category) -> u8 {
         }
         Category::BigStraight => {
             // ビッグストレート: 5つ連続で30点
-            let has_12345 = counts[1] >= 1 && counts[2] >= 1 && counts[3] >= 1 && counts[4] >= 1 && counts[5] >= 1;
-            let has_23456 = counts[2] >= 1 && counts[3] >= 1 && counts[4] >= 1 && counts[5] >= 1 && counts[6] >= 1;
+            let has_12345 = counts[0] >= 1 && counts[1] >= 1 && counts[2] >= 1 && counts[3] >= 1 && counts[4] >= 1;
+            let has_23456 = counts[1] >= 1 && counts[2] >= 1 && counts[3] >= 1 && counts[4] >= 1 && counts[5] >= 1;
             if has_12345 || has_23456 {
                 30
             } else {
@@ -205,7 +205,7 @@ pub fn calculate_score(dice: &[u8; 5], category: Category) -> u8 {
         }
         Category::Choice => sum,
         Category::Yacht => {
-            if counts[1..=6].iter().any(|&c| c == 5) {
+            if counts.iter().any(|&c| c == 5) {
                 50
             } else {
                 0
@@ -611,9 +611,14 @@ impl YachtAI {
     /// どのサイコロを保持するか決定（DPテーブルベース）
     fn decide_holds(&self, game: &GameState) -> Vec<bool> {
         let dice = game.get_dice_values();
+        let locks = game.get_dice_locks();
         let rolls_left = game.get_rolls_left();
         let upper_sum = game.ai_upper_sum_capped();
         let used_hands = game.ai_used_hands_mask();
+
+        // ロックされたダイスのパターンを計算
+        let locked: Vec<bool> = locks.iter().map(|&l| l == 1).collect();
+        let lock_pattern = self.dice_to_lock_pattern(&dice, &locked);
 
         let current_pattern = dp_table::dice_to_pattern(&dice);
         let keep_patterns = dp_table::enumerate_keep_patterns(&current_pattern);
@@ -621,8 +626,14 @@ impl YachtAI {
         let mut best_holds = vec![false; 5];
         let mut best_expected = f32::NEG_INFINITY;
 
-        let no_locks: [bool; 5] = [false; 5];
         for keep in &keep_patterns {
+            // ロックされたダイスを含まないパターンはスキップ
+            // （各面でロック数以上をキープしている必要がある）
+            let valid = (0..6).all(|i| keep[i] >= lock_pattern[i]);
+            if !valid {
+                continue;
+            }
+
             let expected = if rolls_left == 1 {
                 self.evaluate_final_roll(keep, upper_sum, used_hands)
             } else {
@@ -633,11 +644,22 @@ impl YachtAI {
             if expected > best_expected {
                 best_expected = expected;
                 // キープパターンからホールド配列を復元
-                best_holds = self.pattern_to_holds(&dice, keep, &no_locks);
+                best_holds = self.pattern_to_holds(&dice, keep, &locked);
             }
         }
 
         best_holds
+    }
+
+    /// ロックされたダイスのパターンを計算
+    fn dice_to_lock_pattern(&self, dice: &[u8], locks: &[bool]) -> dp_table::DicePattern {
+        let mut pattern = [0u8; 6];
+        for (i, &d) in dice.iter().enumerate() {
+            if locks.get(i).copied().unwrap_or(false) && d >= 1 && d <= 6 {
+                pattern[(d - 1) as usize] += 1;
+            }
+        }
+        pattern
     }
 
     /// 最終振り（1回）の期待値

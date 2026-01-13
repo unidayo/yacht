@@ -397,7 +397,7 @@ private:
 
 void write_output(const string& filename, const vector<vector<double>>& dp) {
     ofstream ofs(filename);
-    ofs << fixed << setprecision(15);
+    ofs << fixed << setprecision(6);
     
     ofs << R"(/**
  * ヨット DP テーブル（自動生成）
