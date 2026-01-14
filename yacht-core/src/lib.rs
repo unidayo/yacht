@@ -23,39 +23,27 @@ pub enum Category {
 }
 
 impl Category {
+    pub const ALL: [Category; 12] = [
+        Category::Ones,
+        Category::Twos,
+        Category::Threes,
+        Category::Fours,
+        Category::Fives,
+        Category::Sixes,
+        Category::FullHouse,
+        Category::FourOfAKind,
+        Category::LittleStraight,
+        Category::BigStraight,
+        Category::Choice,
+        Category::Yacht,
+    ];
+
     pub fn all() -> [Category; 12] {
-        [
-            Category::Ones,
-            Category::Twos,
-            Category::Threes,
-            Category::Fours,
-            Category::Fives,
-            Category::Sixes,
-            Category::FullHouse,
-            Category::FourOfAKind,
-            Category::LittleStraight,
-            Category::BigStraight,
-            Category::Choice,
-            Category::Yacht,
-        ]
+        Self::ALL
     }
 
     pub fn from_index(index: usize) -> Option<Category> {
-        match index {
-            0 => Some(Category::Ones),
-            1 => Some(Category::Twos),
-            2 => Some(Category::Threes),
-            3 => Some(Category::Fours),
-            4 => Some(Category::Fives),
-            5 => Some(Category::Sixes),
-            6 => Some(Category::FullHouse),
-            7 => Some(Category::FourOfAKind),
-            8 => Some(Category::LittleStraight),
-            9 => Some(Category::BigStraight),
-            10 => Some(Category::Choice),
-            11 => Some(Category::Yacht),
-            _ => None,
-        }
+        Self::ALL.get(index).copied()
     }
 }
 
@@ -150,68 +138,10 @@ impl Default for Dice {
     }
 }
 
-// 得点計算
+/// 得点計算（サイコロ値配列版）
 pub fn calculate_score(dice: &[u8; 5], category: Category) -> u8 {
-    let mut counts = [0u8; 6]; // index 0-5 for dice values 1-6
-    for &v in dice {
-        counts[(v - 1) as usize] += 1;
-    }
-    let sum: u8 = dice.iter().sum();
-
-    match category {
-        Category::Ones => counts[0] * 1,
-        Category::Twos => counts[1] * 2,
-        Category::Threes => counts[2] * 3,
-        Category::Fours => counts[3] * 4,
-        Category::Fives => counts[4] * 5,
-        Category::Sixes => counts[5] * 6,
-        Category::FullHouse => {
-            let has_three = counts.iter().any(|&c| c == 3);
-            let has_two = counts.iter().any(|&c| c == 2);
-            if has_three && has_two {
-                sum
-            } else {
-                0
-            }
-        }
-        Category::FourOfAKind => {
-            // 4つ以上同じ目があれば、全ての出目の合計
-            if counts.iter().any(|&c| c >= 4) {
-                sum
-            } else {
-                0
-            }
-        }
-        Category::LittleStraight => {
-            // スモールストレート: 4つ連続で15点
-            let has_1234 = counts[0] >= 1 && counts[1] >= 1 && counts[2] >= 1 && counts[3] >= 1;
-            let has_2345 = counts[1] >= 1 && counts[2] >= 1 && counts[3] >= 1 && counts[4] >= 1;
-            let has_3456 = counts[2] >= 1 && counts[3] >= 1 && counts[4] >= 1 && counts[5] >= 1;
-            if has_1234 || has_2345 || has_3456 {
-                15
-            } else {
-                0
-            }
-        }
-        Category::BigStraight => {
-            // ビッグストレート: 5つ連続で30点
-            let has_12345 = counts[0] >= 1 && counts[1] >= 1 && counts[2] >= 1 && counts[3] >= 1 && counts[4] >= 1;
-            let has_23456 = counts[1] >= 1 && counts[2] >= 1 && counts[3] >= 1 && counts[4] >= 1 && counts[5] >= 1;
-            if has_12345 || has_23456 {
-                30
-            } else {
-                0
-            }
-        }
-        Category::Choice => sum,
-        Category::Yacht => {
-            if counts.iter().any(|&c| c == 5) {
-                50
-            } else {
-                0
-            }
-        }
-    }
+    let pattern = dp_table::dice_to_pattern(dice);
+    dp_table::calculate_score(&pattern, category as usize)
 }
 
 // プレイヤーのスコアボード
@@ -260,7 +190,11 @@ impl ScoreBoard {
     }
 
     pub fn get_upper_bonus(&self) -> u16 {
-        if self.get_upper_total() >= 63 { 35 } else { 0 }
+        if self.get_upper_total() >= dp_table::UPPER_BONUS_THRESHOLD as u16 {
+            dp_table::UPPER_BONUS_POINTS as u16
+        } else {
+            0
+        }
     }
 
     pub fn get_lower_total(&self) -> u16 {
@@ -304,7 +238,7 @@ impl ScoreBoard {
 
     /// 上段スコアの累計を取得（63上限）
     pub fn upper_sum_capped(&self) -> usize {
-        self.get_upper_total().min(63) as usize
+        (self.get_upper_total() as usize).min(dp_table::UPPER_BONUS_THRESHOLD)
     }
 }
 
@@ -504,50 +438,6 @@ impl Default for GameState {
 
 // ========== AI Engine (DPテーブルベース) ==========
 
-/// 出目パターンから得点を計算
-fn calculate_score_from_pattern(pattern: &dp_table::DicePattern, category: Category) -> u8 {
-    match category {
-        Category::Ones => pattern[0] * 1,
-        Category::Twos => pattern[1] * 2,
-        Category::Threes => pattern[2] * 3,
-        Category::Fours => pattern[3] * 4,
-        Category::Fives => pattern[4] * 5,
-        Category::Sixes => pattern[5] * 6,
-        Category::FullHouse => {
-            let has_three = pattern.iter().any(|&c| c == 3);
-            let has_two = pattern.iter().any(|&c| c == 2);
-            if has_three && has_two {
-                dp_table::pattern_pips(pattern)
-            } else {
-                0
-            }
-        }
-        Category::FourOfAKind => {
-            if pattern.iter().any(|&c| c >= 4) {
-                dp_table::pattern_pips(pattern)
-            } else {
-                0
-            }
-        }
-        Category::LittleStraight => {
-            // 4連続: 1-4, 2-5, 3-6
-            let has_1234 = pattern[0] >= 1 && pattern[1] >= 1 && pattern[2] >= 1 && pattern[3] >= 1;
-            let has_2345 = pattern[1] >= 1 && pattern[2] >= 1 && pattern[3] >= 1 && pattern[4] >= 1;
-            let has_3456 = pattern[2] >= 1 && pattern[3] >= 1 && pattern[4] >= 1 && pattern[5] >= 1;
-            if has_1234 || has_2345 || has_3456 { 15 } else { 0 }
-        }
-        Category::BigStraight => {
-            let has_12345 = pattern[0] >= 1 && pattern[1] >= 1 && pattern[2] >= 1 && pattern[3] >= 1 && pattern[4] >= 1;
-            let has_23456 = pattern[1] >= 1 && pattern[2] >= 1 && pattern[3] >= 1 && pattern[4] >= 1 && pattern[5] >= 1;
-            if has_12345 || has_23456 { 30 } else { 0 }
-        }
-        Category::Choice => dp_table::pattern_pips(pattern),
-        Category::Yacht => {
-            if pattern.iter().any(|&c| c == 5) { 50 } else { 0 }
-        }
-    }
-}
-
 #[wasm_bindgen]
 pub struct YachtAI {}
 
@@ -740,12 +630,11 @@ impl YachtAI {
     ) -> f32 {
         let mut best = f32::NEG_INFINITY;
 
-        for cat_idx in 0..12 {
+        for cat_idx in 0..dp_table::NUM_CATEGORIES {
             if (used_hands >> cat_idx) & 1 == 1 {
                 continue;
             }
-            let category = Category::from_index(cat_idx).unwrap();
-            let score = calculate_score_from_pattern(dice, category);
+            let score = dp_table::calculate_score(dice, cat_idx);
             let value = dp_table::evaluate_category_choice(upper_sum, used_hands, cat_idx, score);
             if value > best {
                 best = value;
@@ -792,12 +681,11 @@ impl YachtAI {
         let mut best_category = 0;
         let mut best_value = f32::NEG_INFINITY;
 
-        for cat_idx in 0..12 {
+        for cat_idx in 0..dp_table::NUM_CATEGORIES {
             if (used_hands >> cat_idx) & 1 == 1 {
                 continue;
             }
-            let category = Category::from_index(cat_idx).unwrap();
-            let score = calculate_score_from_pattern(&pattern, category);
+            let score = dp_table::calculate_score(&pattern, cat_idx);
             let value = dp_table::evaluate_category_choice(upper_sum, used_hands, cat_idx, score);
 
             if value > best_value {
@@ -823,12 +711,11 @@ impl YachtAI {
 
         let mut choices: Vec<(usize, u8, f32)> = Vec::new();
 
-        for cat_idx in 0..12 {
+        for cat_idx in 0..dp_table::NUM_CATEGORIES {
             if (used_hands >> cat_idx) & 1 == 1 {
                 continue;
             }
-            let category = Category::from_index(cat_idx).unwrap();
-            let score = calculate_score_from_pattern(&pattern, category);
+            let score = dp_table::calculate_score(&pattern, cat_idx);
             let future_value = dp_table::evaluate_category_choice(upper_sum, used_hands, cat_idx, score);
             // 現在の合計 + 将来の期待値 = 最終的な合計点数の期待値
             let total_expected = current_total + future_value;

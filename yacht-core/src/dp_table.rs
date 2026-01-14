@@ -8,10 +8,40 @@
 /// - used_hands: 0-4095 (4096通り、12ビットマスク)
 static DP_TABLE_DATA: &[u8] = include_bytes!("dp_table.bin");
 
+// =============================================================================
+// 定数
+// =============================================================================
+
+pub const NUM_CATEGORIES: usize = 12;
+pub const UPPER_BONUS_THRESHOLD: usize = 63;
+pub const UPPER_BONUS_POINTS: u8 = 35;
+
 const UPPER_SUM_MAX: usize = 64;
 const USED_HANDS_MAX: usize = 4096;
-const UPPER_BONUS_THRESHOLD: usize = 63;
-const UPPER_BONUS_POINTS: f32 = 35.0;
+
+// =============================================================================
+// カテゴリID
+// =============================================================================
+
+pub mod category {
+    pub const ONES: usize = 0;
+    pub const TWOS: usize = 1;
+    pub const THREES: usize = 2;
+    pub const FOURS: usize = 3;
+    pub const FIVES: usize = 4;
+    pub const SIXES: usize = 5;
+    pub const FULL_HOUSE: usize = 6;
+    pub const FOUR_OF_A_KIND: usize = 7;
+    pub const LITTLE_STRAIGHT: usize = 8;
+    pub const BIG_STRAIGHT: usize = 9;
+    pub const CHOICE: usize = 10;
+    pub const YACHT: usize = 11;
+
+    #[inline]
+    pub const fn is_upper(cat: usize) -> bool {
+        cat < 6
+    }
+}
 
 /// DPテーブルから期待得点を取得
 #[inline]
@@ -36,16 +66,15 @@ pub fn get_initial_expected_score() -> f32 {
 pub fn evaluate_category_choice(
     current_upper_sum: usize,
     current_used_hands: usize,
-    category: usize,
+    cat: usize,
     immediate_score: u8,
 ) -> f32 {
-    let new_used_hands = current_used_hands | (1 << category);
-    let is_upper = category < 6;
+    let new_used_hands = current_used_hands | (1 << cat);
 
-    if is_upper {
+    if category::is_upper(cat) {
         let new_upper_sum = (current_upper_sum + immediate_score as usize).min(UPPER_BONUS_THRESHOLD);
         let bonus = if current_upper_sum < UPPER_BONUS_THRESHOLD && new_upper_sum >= UPPER_BONUS_THRESHOLD {
-            UPPER_BONUS_POINTS
+            UPPER_BONUS_POINTS as f32
         } else {
             0.0
         };
@@ -216,6 +245,56 @@ pub fn dice_to_pattern(dice: &[u8]) -> DicePattern {
 /// 出目パターンの合計値（ピップ数）
 pub fn pattern_pips(p: &DicePattern) -> u8 {
     p[0] * 1 + p[1] * 2 + p[2] * 3 + p[3] * 4 + p[4] * 5 + p[5] * 6
+}
+
+// =============================================================================
+// 得点計算
+// =============================================================================
+
+/// 4連続があるかチェック（スモールストレート用）
+#[inline]
+fn has_small_straight(p: &DicePattern) -> bool {
+    (p[0] >= 1 && p[1] >= 1 && p[2] >= 1 && p[3] >= 1) ||  // 1-2-3-4
+    (p[1] >= 1 && p[2] >= 1 && p[3] >= 1 && p[4] >= 1) ||  // 2-3-4-5
+    (p[2] >= 1 && p[3] >= 1 && p[4] >= 1 && p[5] >= 1)     // 3-4-5-6
+}
+
+/// 5連続があるかチェック（ビッグストレート用）
+#[inline]
+fn has_big_straight(p: &DicePattern) -> bool {
+    (p[0] >= 1 && p[1] >= 1 && p[2] >= 1 && p[3] >= 1 && p[4] >= 1) ||  // 1-2-3-4-5
+    (p[1] >= 1 && p[2] >= 1 && p[3] >= 1 && p[4] >= 1 && p[5] >= 1)     // 2-3-4-5-6
+}
+
+/// 出目パターンから得点を計算
+pub fn calculate_score(p: &DicePattern, cat: usize) -> u8 {
+    match cat {
+        category::ONES => p[0] * 1,
+        category::TWOS => p[1] * 2,
+        category::THREES => p[2] * 3,
+        category::FOURS => p[3] * 4,
+        category::FIVES => p[4] * 5,
+        category::SIXES => p[5] * 6,
+        category::FULL_HOUSE => {
+            let has_three = p.iter().any(|&c| c == 3);
+            let has_two = p.iter().any(|&c| c == 2);
+            if has_three && has_two { pattern_pips(p) } else { 0 }
+        }
+        category::FOUR_OF_A_KIND => {
+            if p.iter().any(|&c| c >= 4) { pattern_pips(p) } else { 0 }
+        }
+        category::LITTLE_STRAIGHT => {
+            if has_small_straight(p) { 15 } else { 0 }
+        }
+        category::BIG_STRAIGHT => {
+            if has_big_straight(p) { 30 } else { 0 }
+        }
+        category::CHOICE => pattern_pips(p),
+        category::YACHT => {
+            if p.iter().any(|&c| c == 5) { 50 } else { 0 }
+        }
+        _ => 0,
+    }
 }
 
 #[cfg(test)]
