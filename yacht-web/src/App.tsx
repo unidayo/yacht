@@ -499,6 +499,51 @@ function App() {
           )}
         </>
       )}
+
+      {/* ルール説明 */}
+      <div className="rules-section">
+        <h2>遊び方</h2>
+        <div className="rules-content">
+          <div className="rule-block">
+            <h3>基本ルール</h3>
+            <ul>
+              <li>5つのサイコロを振って役を作るゲームです</li>
+              <li>1ターンに最大3回まで振ることができます</li>
+              <li>振った後、キープしたいサイコロをクリックして選択できます</li>
+              <li>12個の役を埋めたらゲーム終了です</li>
+            </ul>
+          </div>
+
+          <div className="rule-block">
+            <h3>上段の役（数字の目）</h3>
+            <ul>
+              <li><strong>1の目〜6の目</strong>：該当する目の合計点（例：4が3つなら12点）</li>
+              <li><strong>ボーナス</strong>：上段の合計が63点以上なら+35点</li>
+            </ul>
+          </div>
+
+          <div className="rule-block">
+            <h3>下段の役</h3>
+            <ul>
+              <li><strong>フルハウス</strong>：同じ目3つ＋同じ目2つ → 全ての目の合計点</li>
+              <li><strong>フォーオブアカインド</strong>：同じ目4つ以上 → 全ての目の合計点</li>
+              <li><strong>スモールストレート</strong>：4つ連続（1-2-3-4, 2-3-4-5, 3-4-5-6）→ 15点</li>
+              <li><strong>ビッグストレート</strong>：5つ連続（1-2-3-4-5 または 2-3-4-5-6）→ 30点</li>
+              <li><strong>チョイス</strong>：どんな出目でもOK → 全ての目の合計点</li>
+              <li><strong>ヨット</strong>：5つ全て同じ目 → 50点</li>
+            </ul>
+          </div>
+
+          <div className="rule-block">
+            <h3>ヒント</h3>
+            <ul>
+              <li>上段ボーナス（+35点）を狙うなら、各目で平均3つ以上を目指しましょう</li>
+              <li>「推奨を表示」で最適なプレイの参考にできます</li>
+              <li>役が作れない場合は、0点でも埋める必要があります</li>
+            </ul>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

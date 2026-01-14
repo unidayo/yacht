@@ -498,6 +498,65 @@ h1 {
   background: linear-gradient(90deg, #f5cba7 0%, #cce5ff 100%);
 }
 
+/* ルール説明 */
+.rules-section {
+  margin-top: 40px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  border: 1px solid #dee2e6;
+}
+
+.rules-section h2 {
+  text-align: center;
+  color: #2c3e50;
+  font-size: 1.4rem;
+  margin: 0 0 20px 0;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #667eea;
+}
+
+.rules-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.rule-block {
+  background: white;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.rule-block h3 {
+  color: #667eea;
+  font-size: 1rem;
+  margin: 0 0 10px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.rule-block ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.rule-block li {
+  color: #495057;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+
+.rule-block li:last-child {
+  margin-bottom: 0;
+}
+
+.rule-block li strong {
+  color: #2c3e50;
+}
+
 /* レスポンシブ */
 @media (max-width: 700px) {
   .game-area {
@@ -522,5 +581,18 @@ h1 {
   .dot {
     width: 8px;
     height: 8px;
+  }
+
+  .rules-content {
+    grid-template-columns: 1fr;
+  }
+
+  .rules-section {
+    margin-top: 30px;
+    padding: 15px;
+  }
+
+  .rule-block li {
+    font-size: 0.85rem;
   }
 }
